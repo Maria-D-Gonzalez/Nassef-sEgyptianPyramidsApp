@@ -1,367 +1,574 @@
 package com.example;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.Reader;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Scanner;
-import java.util.Set;
 
 public class Main {
-    private static final int PROJECT_COUNT = 100;
-    private static final int MAX_LOCATION_LENGTH = 100;
-    private static final int MAX_CONTRIBUTOR_NAME_LENGTH = 100;
-    private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(3);
-    private static final List<String> PHARAOHS = List.of(
-            "Narmer", "Hor-Aha", "Djer", "Djet", "Den", "Anedjib", "Semerkhet", "Qa'a",
-            "Hotepsekhemwy", "Raneb", "Ninetjer", "Weneg", "Sened", "Peribsen", "Khasekhemwy",
-            "Djoser", "Sekhemkhet", "Khaba", "Huni", "Sneferu", "Khufu", "Djedefre", "Khafre",
-            "Menkaure", "Shepseskaf", "Userkaf", "Sahure", "Neferirkare", "Neferefre", "Nyuserre",
-            "Menkauhor", "Djedkare Isesi", "Unas", "Teti", "Userkare", "Pepi I", "Merenre I",
-            "Pepi II", "Merenre II", "Mentuhotep II", "Mentuhotep III", "Mentuhotep IV",
-            "Amenemhat I", "Senusret I", "Amenemhat II", "Senusret II", "Senusret III",
-            "Amenemhat III", "Amenemhat IV", "Sobekneferu", "Seqenenre Tao", "Kamose",
-            "Ahmose I", "Amenhotep I", "Thutmose I", "Thutmose II", "Hatshepsut", "Thutmose III",
-            "Amenhotep II", "Thutmose IV", "Amenhotep III", "Akhenaten", "Smenkhkare",
-            "Tutankhamun", "Ay", "Horemheb", "Ramesses I", "Seti I", "Ramesses II",
-            "Merenptah", "Amenmesse", "Seti II", "Siptah", "Tausret", "Ramesses III",
-            "Ramesses IV", "Ramesses V", "Ramesses VI", "Ramesses VII", "Ramesses VIII",
-            "Ramesses IX", "Ramesses X", "Ramesses XI", "Shoshenq I", "Osorkon I",
-            "Osorkon II", "Piye", "Shabaka", "Taharqa", "Psamtik I", "Necho II", "Apries",
-            "Amasis II", "Psamtik III", "Nectanebo I", "Nectanebo II", "Ptolemy I Soter",
-            "Ptolemy II Philadelphus", "Ptolemy III Euergetes", "Ptolemy IV Philopator",
-            "Ptolemy V Epiphanes", "Ptolemy VI Philometor", "Ptolemy VIII Physcon",
-            "Ptolemy XII Auletes", "Cleopatra VII"
+
+  // I've used two arrays here for O(1) reading of the pharaohs and pyramids.
+  // other structures or additional structures can be used
+  private Pharaoh[] pharaohArray;
+  private Pyramid[] pyramidArray;
+  private final LinkedHashMap<Integer, Pyramid> requestedPyramids = new LinkedHashMap<>();
+
+  public static void main(String[] args) {
+    Main app = new Main();
+    app.start();
+  }
+
+  // main loop for app
+  public void start() {
+    Scanner scan = new Scanner(System.in);
+    char command = '_';
+
+    while (command != 'q') {
+      printMenu();
+      System.out.print("Enter a command: ");
+      command = menuGetCommand(scan);
+      executeCommand(command, scan);
+    }
+  }
+
+  // constructor to initialize the app and read commands
+  public Main() {
+    String pharaohFile = findJsonFile("pharaoh.json");
+    JSONArray pharaohJSONArray = JSONFile.readArray(pharaohFile);
+    initializePharaoh(pharaohJSONArray);
+
+    String pyramidFile = findJsonFile("pyramid.json");
+    JSONArray pyramidJSONArray = JSONFile.readArray(pyramidFile);
+    initializePyramid(pyramidJSONArray);
+  }
+
+  private static String findJsonFile(String fileName) {
+    String[] candidatePaths = {
+      "src/main/resources/" + fileName,
+      "demo/src/main/resources/" + fileName,
+      "src/main/java/com/example/" + fileName,
+      "demo/src/main/java/com/example/" + fileName,
+      fileName
+    };
+
+    for (String path : candidatePaths) {
+      java.io.File file = new java.io.File(path);
+      if (file.exists()) {
+        return path;
+      }
+    }
+
+    return fileName;
+  }
+
+  private void initializePharaoh(JSONArray pharaohJSONArray) {
+    if (pharaohJSONArray == null) {
+      pharaohArray = new Pharaoh[0];
+      return;
+    }
+
+    pharaohArray = new Pharaoh[pharaohJSONArray.size()];
+
+    for (int i = 0; i < pharaohJSONArray.size(); i++) {
+      JSONObject o = (JSONObject) pharaohJSONArray.get(i);
+
+      Integer id = toInteger(o, "id");
+      String name = (String) o.get("name");
+      Integer begin = toInteger(o, "begin");
+      Integer end = toInteger(o, "end");
+      Integer contribution = toInteger(o, "contribution");
+      Integer gold = toInteger(o, "gold");
+      String hieroglyphic = (String) o.get("hieroglyphic");
+
+      pharaohArray[i] = new Pharaoh(id, name, begin, end, contribution, gold, hieroglyphic);
+    }
+  }
+
+  private void initializePyramid(JSONArray pyramidJSONArray) {
+    if (pyramidJSONArray == null) {
+      pyramidArray = new Pyramid[0];
+      return;
+    }
+
+    pyramidArray = new Pyramid[pyramidJSONArray.size()];
+
+    for (int i = 0; i < pyramidJSONArray.size(); i++) {
+      JSONObject o = (JSONObject) pyramidJSONArray.get(i);
+
+      Integer id = toInteger(o, "id");
+      String name = (String) o.get("name");
+      JSONArray contributorsJSONArray = (JSONArray) o.get("contributors");
+      PyramidContributor[] contributors = new PyramidContributor[contributorsJSONArray == null ? 0 : contributorsJSONArray.size()];
+      if (contributorsJSONArray != null) {
+        for (int j = 0; j < contributorsJSONArray.size(); j++) {
+          Object contributor = contributorsJSONArray.get(j);
+          if (contributor instanceof JSONObject contributorObject) {
+            Object contributorName = contributorObject.get("name");
+            String contributorNameString = contributorName == null ? null : contributorName.toString();
+            Pharaoh pharaoh = findPharaohByName(contributorNameString);
+            Integer gold = toInteger(contributorObject, "gold");
+            Integer totalContribution = toInteger(contributorObject, "totalContribution");
+            if (totalContribution == null) {
+              totalContribution = toInteger(contributorObject, "contribution");
+            }
+            if (pharaoh != null) {
+              if (gold == null) gold = pharaoh.getGold();
+              if (totalContribution == null) totalContribution = pharaoh.getContribution();
+            }
+            contributors[j] = new PyramidContributor(contributorNameString, gold, totalContribution);
+          } else {
+            String contributorName = contributor == null ? null : contributor.toString();
+            Pharaoh pharaoh = findPharaohByName(contributorName);
+            contributors[j] = new PyramidContributor(
+              contributorName,
+              pharaoh == null ? null : pharaoh.getGold(),
+              pharaoh == null ? null : pharaoh.getContribution()
+            );
+          }
+        }
+      }
+
+      pyramidArray[i] = new Pyramid(id, name, contributors);
+    }
+  }
+
+  private Integer toInteger(JSONObject o, String key) {
+    Object value = o.get(key);
+    return value == null ? null : Integer.valueOf(value.toString());
+  }
+
+  private Pharaoh findPharaohByName(String name) {
+    if (name == null) return null;
+    for (Pharaoh pharaoh : pharaohArray) {
+      if (name.equalsIgnoreCase(pharaoh.getName())) return pharaoh;
+    }
+    return null;
+  }
+
+  private static Character menuGetCommand(Scanner scan) {
+    Character command = '_';
+    String rawInput = scan.nextLine();
+
+    if (rawInput.length() > 0) {
+      command = Character.toLowerCase(rawInput.charAt(0));
+    }
+
+    return command;
+  }
+
+  private void printAllPharaoh() {
+    for (Pharaoh pharaoh : pharaohArray) {
+      printMenuLine();
+      pharaoh.print();
+      printMenuLine();
+    }
+  }
+
+  private void printAllPyramids() {
+    for (Pyramid pyramid : pyramidArray) {
+      printMenuLine();
+      pyramid.print();
+      printMenuLine();
+    }
+  }
+
+  private void printPyramidById(Scanner scan) {
+    System.out.print("Enter a pyramid ID: ");
+    String rawId = scan.nextLine().trim();
+    int id;
+    try {
+      id = Integer.parseInt(rawId);
+    } catch (NumberFormatException e) {
+      System.out.println("ERROR: Invalid pyramid ID");
+      return;
+    }
+
+    for (Pyramid pyramid : pyramidArray) {
+      if (pyramid.getId() != null && pyramid.getId().equals(id)) {
+        requestedPyramids.put(pyramid.getId(), pyramid);
+        printMenuLine();
+        pyramid.printDetails();
+        printMenuLine();
+        return;
+      }
+    }
+    System.out.println("No pyramid found with ID: " + id);
+  }
+
+  private void printRequestedPyramids() {
+    if (requestedPyramids.isEmpty()) {
+      System.out.println("No pyramids have been requested.");
+      return;
+    }
+
+    for (Pyramid pyramid : requestedPyramids.values()) {
+      printMenuLine();
+      pyramid.print();
+      printMenuLine();
+    }
+  }
+
+  private void printPharaohById(Scanner scan) {
+    System.out.print("Enter a pharaoh ID: ");
+    String rawId = scan.nextLine().trim();
+    int id;
+    try {
+      id = Integer.parseInt(rawId);
+    } catch (NumberFormatException e) {
+      System.out.println("ERROR: Invalid pharaoh ID");
+      return;
+    }
+
+    for (Pharaoh pharaoh : pharaohArray) {
+      if (pharaoh.getId() != null && pharaoh.getId().equals(id)) {
+        printMenuLine();
+        pharaoh.print();
+        printMenuLine();
+        return;
+      }
+    }
+    System.out.println("No pharaoh found with ID: " + id);
+  }
+
+  private boolean executeCommand(Character command, Scanner scan) {
+    boolean success = true;
+
+    switch (command) {
+      case '1' -> printAllPharaoh();
+      case '2' -> printPharaohById(scan);
+      case '3' -> printAllPyramids();
+      case '4' -> printPyramidById(scan);
+      case '5' -> printRequestedPyramids();
+      case 'q' -> System.out.println("Thank you for using Nassef's Egyptian Pyramid App!");
+      default -> {
+        System.out.println("ERROR: Unknown command");
+        success = false;
+      }
+    }
+
+    return success;
+  }
+
+  private static void printMenuCommand(char command, String desc) {
+    System.out.printf("%s\t\t%s\n", command, desc);
+  }
+
+  private static void printMenuLine() {
+    System.out.println(
+      "--------------------------------------------------------------------------"
     );
+  }
 
-    private final Map<String, Project> projects = new LinkedHashMap<>();
-    private final Set<String> requestedPyramids = new LinkedHashSet<>();
-    private BigDecimal availableGold = ZERO;
+  public static void printMenu() {
+    printMenuLine();
+    System.out.println("Nassef's Egyptian Pyramids App");
+    printMenuLine();
+    System.out.printf("Command\t\tDescription\n");
+    System.out.printf("-------\t\t---------------------------------------\n");
+    printMenuCommand('1', "List all the pharaohs");
+    printMenuCommand('2', "Display a pharaoh by ID");
+    printMenuCommand('3', "List all the pyramids and their contributors");
+    printMenuCommand('4', "Display a pyramid and its contributor details by ID");
+    printMenuCommand('5', "Report requested pyramids without duplicates");
+    printMenuCommand('q', "Quit");
+    printMenuLine();
+  }
+}
 
-    public Main() {
-        for (int i = 1; i <= PROJECT_COUNT; i++) {
-            String id = String.format(Locale.ROOT, "P%03d", i);
-            projects.put(id, new Project(id, "Unassigned site"));
-        }
+class Pharaoh {
+  private final Integer id;
+  private final String name;
+  private final Integer begin;
+  private final Integer end;
+  private final Integer contribution;
+  private final Integer gold;
+  private final String hieroglyphic;
+
+  public Pharaoh(Integer id, String name, Integer begin, Integer end, Integer contribution, Integer gold, String hieroglyphic) {
+    this.id = id;
+    this.name = name;
+    this.begin = begin;
+    this.end = end;
+    this.contribution = contribution;
+    this.gold = gold;
+    this.hieroglyphic = hieroglyphic;
+  }
+
+  public Integer getId() {
+    return id;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public Integer getContribution() {
+    return contribution;
+  }
+
+  public Integer getGold() {
+    return gold;
+  }
+
+  public void print() {
+    System.out.printf(
+      "ID: %d, Name: %s, Reign: %d-%d, Contribution: %d, Hieroglyphic: %s%n",
+      id, name, begin, end, contribution, hieroglyphic
+    );
+  }
+}
+
+class Pyramid {
+  private final Integer id;
+  private final String name;
+  private final PyramidContributor[] contributors;
+
+  public Pyramid(Integer id, String name, PyramidContributor[] contributors) {
+    this.id = id;
+    this.name = name;
+    this.contributors = contributors;
+  }
+
+  public void print() {
+    String[] contributorNames = new String[contributors.length];
+    for (int i = 0; i < contributors.length; i++) {
+      contributorNames[i] = contributors[i].getName();
     }
+    System.out.printf("ID: %d, Name: %s, Contributors: %s%n", id, name, java.util.Arrays.toString(contributorNames));
+  }
 
-    public static void main(String[] args) {
-        Main app = new Main();
-        System.out.println("Global Pyramid Gold Ledger (simulation only)");
-        System.out.println("Enter 'help' to see commands, or 'quit' to exit.");
+  public Integer getId() {
+    return id;
+  }
 
-        try (Scanner scanner = new Scanner(System.in)) {
-            while (scanner.hasNextLine()) {
-                String line = scanner.nextLine().trim();
-                if (line.isEmpty()) {
-                    continue;
-                }
-                if (!app.execute(line, scanner)) {
-                    break;
-                }
+  public void printDetails() {
+    System.out.printf("ID: %s, Name: %s%n", id, name);
+    for (PyramidContributor contributor : contributors) {
+      System.out.printf(
+        "Contributor: %s, Gold: %s, Total contribution: %s%n",
+        contributor.getName(), contributor.getGold(), contributor.getTotalContribution()
+      );
+    }
+  }
+}
+
+class PyramidContributor {
+  private final String name;
+  private final Integer gold;
+  private final Integer totalContribution;
+
+  public PyramidContributor(String name, Integer gold, Integer totalContribution) {
+    this.name = name;
+    this.gold = gold;
+    this.totalContribution = totalContribution;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public Integer getGold() {
+    return gold;
+  }
+
+  public Integer getTotalContribution() {
+    return totalContribution;
+  }
+}
+
+class JSONFile {
+  public static JSONArray readArray(String fileName) {
+    JSONParser jsonParser = new JSONParser();
+
+    try (FileReader reader = new FileReader(fileName)) {
+      Object obj = jsonParser.parse(reader);
+      if (!(obj instanceof JSONArray)) {
+        throw new IllegalStateException("JSON file does not contain an array: " + fileName);
+      }
+      return (JSONArray) obj;
+    } catch (IOException | ParseException e) {
+      throw new IllegalStateException("Unable to read JSON file: " + fileName, e);
+    }
+  }
+}
+
+// Small self-contained JSON reader so this file does not require an external library.
+class JSONArray extends ArrayList<Object> {}
+
+class JSONObject extends HashMap<String, Object> {}
+
+class ParseException extends Exception {
+  ParseException(String message) {
+    super(message);
+  }
+}
+
+class JSONParser {
+  private String text;
+  private int position;
+
+  public Object parse(Reader reader) throws IOException, ParseException {
+    StringBuilder contents = new StringBuilder();
+    char[] buffer = new char[2048];
+    int count;
+    while ((count = reader.read(buffer)) != -1) {
+      contents.append(buffer, 0, count);
+    }
+    text = contents.toString();
+    position = 0;
+    Object result = parseValue();
+    skipWhitespace();
+    if (position != text.length()) {
+      throw error("Unexpected trailing content");
+    }
+    return result;
+  }
+
+  private Object parseValue() throws ParseException {
+    skipWhitespace();
+    if (position >= text.length()) throw error("Unexpected end of input");
+    char current = text.charAt(position);
+    if (current == '{') return parseObject();
+    if (current == '[') return parseArray();
+    if (current == '"') return parseString();
+    if (current == 't') return parseLiteral("true", Boolean.TRUE);
+    if (current == 'f') return parseLiteral("false", Boolean.FALSE);
+    if (current == 'n') return parseLiteral("null", null);
+    if (current == '-' || Character.isDigit(current)) return parseNumber();
+    throw error("Unexpected character");
+  }
+
+  private JSONObject parseObject() throws ParseException {
+    JSONObject object = new JSONObject();
+    position++;
+    skipWhitespace();
+    if (consume('}')) return object;
+    while (true) {
+      skipWhitespace();
+      if (position >= text.length() || text.charAt(position) != '"') {
+        throw error("Expected an object key");
+      }
+      String key = parseString();
+      skipWhitespace();
+      expect(':');
+      object.put(key, parseValue());
+      skipWhitespace();
+      if (consume('}')) return object;
+      expect(',');
+    }
+  }
+
+  private JSONArray parseArray() throws ParseException {
+    JSONArray array = new JSONArray();
+    position++;
+    skipWhitespace();
+    if (consume(']')) return array;
+    while (true) {
+      array.add(parseValue());
+      skipWhitespace();
+      if (consume(']')) return array;
+      expect(',');
+    }
+  }
+
+  private String parseString() throws ParseException {
+    expect('"');
+    StringBuilder value = new StringBuilder();
+    while (position < text.length()) {
+      char current = text.charAt(position++);
+      if (current == '"') return value.toString();
+      if (current == '\\') {
+        if (position >= text.length()) throw error("Incomplete escape sequence");
+        char escaped = text.charAt(position++);
+        switch (escaped) {
+          case '"' -> value.append(escaped);
+          case '\\' -> value.append(escaped);
+          case '/' -> value.append(escaped);
+          case 'b' -> value.append('\b');
+          case 'f' -> value.append('\f');
+          case 'n' -> value.append('\n');
+          case 'r' -> value.append('\r');
+          case 't' -> value.append('\t');
+          case 'u' -> {
+            if (position + 4 > text.length()) throw error("Incomplete unicode escape");
+            try {
+              value.append((char) Integer.parseInt(text.substring(position, position + 4), 16));
+            } catch (NumberFormatException e) {
+              throw error("Invalid unicode escape");
             }
+            position += 4;
+          }
+          default -> throw error("Invalid escape sequence");
         }
+      } else {
+        if (current < 0x20) throw error("Unescaped control character");
+        value.append(current);
+      }
     }
+    throw error("Unterminated string");
+  }
 
-    private boolean execute(String line, Scanner scanner) {
-        String[] parts = line.split("\\s+", 3);
-        String command = parts[0].toLowerCase(Locale.ROOT);
-
-        try {
-            switch (command) {
-                case "1", "pharaohs" -> printPharaohs();
-                case "2" -> promptForPharaoh(scanner);
-                case "3" -> printPyramidsAndContributors();
-                case "4" -> promptForPyramid(scanner);
-                case "5" -> printRequestedPyramids();
-                case "help" -> printHelp();
-                case "status" -> printStatus();
-                case "projects" -> printProjects();
-                case "fund" -> fund(requireAmount(parts, 2));
-                case "contribute" -> contribute(parts);
-                case "allocate" -> allocate(parts);
-                case "release" -> release(parts);
-                case "locate" -> locate(parts);
-                case "quit", "exit" -> {
-                    System.out.println("Ledger closed. No gold was physically transferred.");
-                    return false;
-                }
-                default -> System.out.println("Unknown command. Enter 'help' to see available commands.");
-            }
-        } catch (IllegalArgumentException | ArithmeticException e) {
-            System.out.println("Error: " + e.getMessage());
-        }
-        return true;
+  private Object parseNumber() throws ParseException {
+    int start = position;
+    consume('-');
+    if (consume('0')) {
+      if (position < text.length() && Character.isDigit(text.charAt(position))) {
+        throw error("Leading zero in number");
+      }
+    } else {
+      consumeDigits();
     }
-
-    private void printHelp() {
-        System.out.println("""
-                Commands (gold amounts are in grams; this is an in-memory simulation):
-                  1                                  List pharaohs in the historical catalog
-                  pharaohs                           List pharaohs in the historical catalog
-                  2                                  Prompt for an ID and show a pharaoh's catalog details
-                  3                                  List all pyramids and their recorded contributors
-                  4                                  Prompt for a pyramid ID and show its contributors and total
-                  5                                  List pyramids looked up with command 4, without duplicates
-                  contribute <project-id> <grams> <name> Record a named gold contribution for a pyramid
-                  fund <grams>                       Add simulated gold to the treasury
-                  allocate <project-id> <grams>      Earmark treasury gold for a project
-                  release <project-id> <grams>       Return earmarked gold to the treasury
-                  locate <project-id> <location>     Set a project's location
-                  projects                           List all 100 projects and allocations
-                  status                             Show treasury and allocation totals
-                  help                               Show this help
-                  quit                               Exit the application
-                Amounts must be positive and may have up to 3 decimal places.
-                Project IDs range from P001 through P100. Allocations do not send or transfer gold.
-                """);
+    boolean decimal = false;
+    if (consume('.')) {
+      decimal = true;
+      consumeDigits();
     }
-
-    private void printPharaohs() {
-        System.out.println("Pharaohs in the historical catalog (" + PHARAOHS.size() + "):");
-        for (int i = 0; i < PHARAOHS.size(); i++) {
-            System.out.printf("%3d. %s%n", i + 1, PHARAOHS.get(i));
-        }
+    if (position < text.length() && (text.charAt(position) == 'e' || text.charAt(position) == 'E')) {
+      decimal = true;
+      position++;
+      if (!consume('+')) consume('-');
+      consumeDigits();
     }
-
-    private void printPyramidsAndContributors() {
-        System.out.println("Pyramids and contributors:");
-        for (Project project : projects.values()) {
-            System.out.printf("%s | %s | allocated %s g%n",
-                    project.id, project.location, format(project.allocatedGold));
-            if (project.contributions.isEmpty()) {
-                System.out.println("  Contributors: none recorded");
-                continue;
-            }
-            for (Map.Entry<String, BigDecimal> contribution : project.contributions.entrySet()) {
-                System.out.printf("  Contributor: %s | %s g%n",
-                        contribution.getKey(), format(contribution.getValue()));
-            }
-        }
+    String number = text.substring(start, position);
+    try {
+      return decimal ? Double.valueOf(number) : Long.valueOf(number);
+    } catch (NumberFormatException e) {
+      throw error("Invalid number");
     }
+  }
 
-    private void promptForPharaoh(Scanner scanner) {
-        System.out.print("Enter pharaoh ID (1-" + PHARAOHS.size() + "): ");
-        if (!scanner.hasNextLine()) {
-            System.out.println("No pharaoh ID was provided.");
-            return;
-        }
+  private void consumeDigits() throws ParseException {
+    int start = position;
+    while (position < text.length() && Character.isDigit(text.charAt(position))) position++;
+    if (start == position) throw error("Expected a digit");
+  }
 
-        String input = scanner.nextLine().trim();
-        final int id;
-        try {
-            id = Integer.parseInt(input);
-        } catch (NumberFormatException e) {
-            System.out.println("Invalid pharaoh ID. Enter a number from 1 to " + PHARAOHS.size() + ".");
-            return;
-        }
-        if (id < 1 || id > PHARAOHS.size()) {
-            System.out.println("Unknown pharaoh ID. Enter a number from 1 to " + PHARAOHS.size() + ".");
-            return;
-        }
+  private Object parseLiteral(String literal, Object value) throws ParseException {
+    if (!text.startsWith(literal, position)) throw error("Invalid literal");
+    position += literal.length();
+    return value;
+  }
 
-        String name = PHARAOHS.get(id - 1);
-        System.out.println("Pharaoh ID: " + id);
-        System.out.println("Name: " + name);
-        System.out.println("Historical details: not yet included in this catalog.");
+  private void skipWhitespace() {
+    while (position < text.length() && Character.isWhitespace(text.charAt(position))) position++;
+  }
+
+  private boolean consume(char expected) {
+    if (position < text.length() && text.charAt(position) == expected) {
+      position++;
+      return true;
     }
+    return false;
+  }
 
-    private void promptForPyramid(Scanner scanner) {
-        System.out.print("Enter pyramid ID (1-" + PROJECT_COUNT + "): ");
-        if (!scanner.hasNextLine()) {
-            System.out.println("No pyramid ID was provided.");
-            return;
-        }
+  private void expect(char expected) throws ParseException {
+    if (!consume(expected)) throw error("Expected '" + expected + "'");
+  }
 
-        String input = scanner.nextLine().trim();
-        final int id;
-        try {
-            id = Integer.parseInt(input);
-        } catch (NumberFormatException e) {
-            System.out.println("Invalid pyramid ID. Enter a number from 1 to " + PROJECT_COUNT + ".");
-            return;
-        }
-        if (id < 1 || id > PROJECT_COUNT) {
-            System.out.println("Unknown pyramid ID. Enter a number from 1 to " + PROJECT_COUNT + ".");
-            return;
-        }
-
-        Project project = projects.get(String.format(Locale.ROOT, "P%03d", id));
-        requestedPyramids.add(project.id);
-        System.out.println("Pyramid ID: " + id + " (" + project.id + ")");
-        System.out.println("Location: " + project.location);
-        if (project.contributions.isEmpty()) {
-            System.out.println("Contributors: none recorded");
-        } else {
-            System.out.println("Contributors:");
-            for (Map.Entry<String, BigDecimal> contribution : project.contributions.entrySet()) {
-                System.out.printf("  %s | %s g%n",
-                        contribution.getKey(), format(contribution.getValue()));
-            }
-        }
-        System.out.println("Total contributions: " + format(totalContributions(project)) + " g");
-    }
-
-    private void printRequestedPyramids() {
-        System.out.println("Requested pyramids (" + requestedPyramids.size() + "):");
-        if (requestedPyramids.isEmpty()) {
-            System.out.println("  No pyramids have been requested.");
-            return;
-        }
-        for (String id : requestedPyramids) {
-            Project project = projects.get(id);
-            System.out.printf("%s | %s%n", project.id, project.location);
-        }
-    }
-
-    private void printStatus() {
-        BigDecimal allocatedGold = totalAllocatedGold();
-        System.out.println("Available treasury: " + format(availableGold) + " g");
-        System.out.println("Allocated to projects: " + format(allocatedGold) + " g");
-        System.out.println("Total accounted gold: " + format(availableGold.add(allocatedGold)) + " g");
-        System.out.println("Projects: " + projects.size());
-    }
-
-    private void printProjects() {
-        for (Project project : projects.values()) {
-            System.out.printf("%s | %s | allocated %s g%n",
-                    project.id, project.location, format(project.allocatedGold));
-        }
-    }
-
-    private void fund(BigDecimal amount) {
-        availableGold = availableGold.add(amount);
-        System.out.println("Added " + format(amount) + " g to the simulated treasury.");
-    }
-
-    private void contribute(String[] parts) {
-        if (parts.length < 3) {
-            throw new IllegalArgumentException("Usage: contribute <project-id> <grams> <contributor name>");
-        }
-        Project project = requireProject(parts[1]);
-        String[] contributionParts = parts[2].split("\\s+", 2);
-        if (contributionParts.length != 2 || contributionParts[1].isBlank()) {
-            throw new IllegalArgumentException("Usage: contribute <project-id> <grams> <contributor name>");
-        }
-        BigDecimal amount = parseAmount(contributionParts[0]);
-        String contributor = contributionParts[1].trim();
-        if (contributor.length() > MAX_CONTRIBUTOR_NAME_LENGTH) {
-            throw new IllegalArgumentException(
-                    "Contributor name must be " + MAX_CONTRIBUTOR_NAME_LENGTH + " characters or fewer.");
-        }
-
-        project.allocatedGold = project.allocatedGold.add(amount);
-        project.contributions.merge(contributor, amount, BigDecimal::add);
-        System.out.println("Recorded " + format(amount) + " g from " + contributor + " for " + project.id + ".");
-    }
-
-    private void allocate(String[] parts) {
-        if (parts.length < 3) {
-            throw new IllegalArgumentException("Usage: allocate <project-id> <grams>");
-        }
-        Project project = requireProject(parts[1]);
-        BigDecimal amount = parseAmount(parts[2]);
-        if (availableGold.compareTo(amount) < 0) {
-            throw new IllegalArgumentException("Insufficient treasury balance.");
-        }
-        availableGold = availableGold.subtract(amount);
-        project.allocatedGold = project.allocatedGold.add(amount);
-        System.out.println("Earmarked " + format(amount) + " g for " + project.id + ".");
-    }
-
-    private void release(String[] parts) {
-        if (parts.length < 3) {
-            throw new IllegalArgumentException("Usage: release <project-id> <grams>");
-        }
-        Project project = requireProject(parts[1]);
-        BigDecimal amount = parseAmount(parts[2]);
-        if (project.allocatedGold.compareTo(amount) < 0) {
-            throw new IllegalArgumentException("Insufficient allocation for " + project.id + ".");
-        }
-        project.allocatedGold = project.allocatedGold.subtract(amount);
-        availableGold = availableGold.add(amount);
-        System.out.println("Returned " + format(amount) + " g from " + project.id + " to the simulated treasury.");
-    }
-
-    private void locate(String[] parts) {
-        if (parts.length < 3) {
-            throw new IllegalArgumentException("Usage: locate <project-id> <location>");
-        }
-        String location = parts[2].trim();
-        if (location.isBlank()) {
-            throw new IllegalArgumentException("Usage: locate <project-id> <location>");
-        }
-        if (location.length() > MAX_LOCATION_LENGTH) {
-            throw new IllegalArgumentException("Location must be " + MAX_LOCATION_LENGTH + " characters or fewer.");
-        }
-        Project project = requireProject(parts[1]);
-        project.location = location;
-        System.out.println("Set " + project.id + " location to " + location + ".");
-    }
-
-    private Project requireProject(String id) {
-        Project project = projects.get(id.toUpperCase(Locale.ROOT));
-        if (project == null) {
-            throw new IllegalArgumentException("Unknown project ID. Use P001 through P100.");
-        }
-        return project;
-    }
-
-    private BigDecimal requireAmount(String[] parts, int expectedCount) {
-        if (parts.length != expectedCount) {
-            throw new IllegalArgumentException("Usage: fund <grams>");
-        }
-        return parseAmount(parts[1]);
-    }
-
-    private BigDecimal parseAmount(String input) {
-        final BigDecimal amount;
-        try {
-            amount = new BigDecimal(input);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Enter a valid gold amount in grams.");
-        }
-        if (amount.scale() > 3) {
-            throw new IllegalArgumentException("Gold amounts may have up to 3 decimal places.");
-        }
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Gold amount must be greater than zero.");
-        }
-        return amount.setScale(3, RoundingMode.UNNECESSARY);
-    }
-
-    private BigDecimal totalAllocatedGold() {
-        BigDecimal total = ZERO;
-        for (Project project : projects.values()) {
-            total = total.add(project.allocatedGold);
-        }
-        return total;
-    }
-
-    private BigDecimal totalContributions(Project project) {
-        BigDecimal total = ZERO;
-        for (BigDecimal amount : project.contributions.values()) {
-            total = total.add(amount);
-        }
-        return total;
-    }
-
-    private String format(BigDecimal amount) {
-        return amount.stripTrailingZeros().toPlainString();
-    }
-
-    private static final class Project {
-        private final String id;
-        private String location;
-        private BigDecimal allocatedGold = ZERO;
-        private final Map<String, BigDecimal> contributions = new LinkedHashMap<>();
-
-        private Project(String id, String location) {
-            this.id = id;
-            this.location = location;
-        }
-    }
+  private ParseException error(String message) {
+    return new ParseException(message + " at position " + position);
+  }
 }

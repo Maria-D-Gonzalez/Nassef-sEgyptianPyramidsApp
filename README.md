@@ -35,7 +35,7 @@ allocate P001 750.5
 status
 projects
 release P001 50
-quit
+q
 ```
 
 Projects are identified as `P001` through `P100`. Funding increases the
