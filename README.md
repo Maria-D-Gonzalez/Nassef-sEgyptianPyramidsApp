@@ -44,15 +44,14 @@ returns earmarked funds to the treasury. Allocations cannot exceed the
 available balance, and releases cannot exceed a project's allocation.
 
 Command `1` (or `pharaohs`) lists the historical pharaoh catalog.
-Command `2` prompts for a pharaoh ID from that list and displays the catalog
-entry's ID and name. The catalog currently does not include further biographical
-details.
-Command `3` lists all 100 pyramid projects with their recorded named
-contributors and contribution amounts. Use
+Command `2` prompts for a pharaoh ID from that list and displays the selected
+catalog entry's available fields.
+Command `3` lists all 100 records from `pyramid.json`, including each pyramid's
+ID, name, and contributors. Use
 `contribute <project-id> <grams> <contributor name>` to record a simulated
 contribution directly for a pyramid; repeated contributions by the same name
 are totaled. This ledger resets when the app exits.
-Command `4` prompts for a pyramid number from 1 to 100 and displays its project
-ID, location, each contributor's recorded gold, and the sum of its contributions.
+Command `4` prompts for a pyramid ID from `pyramid.json` (0 through 99) and
+displays that record's ID, name, and contributors.
 Command `5` reports pyramids successfully looked up with command `4`, in request
 order, with each pyramid listed once even if it was looked up repeatedly.
